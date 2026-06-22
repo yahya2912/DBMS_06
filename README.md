@@ -57,7 +57,8 @@ ssh <your-username>@<server-ip>
 > **Screenshot 1:** Take a screenshot of your terminal showing a successful
 > SSH login (the welcome banner and your shell prompt) and insert it here.
 >
-> `[insert screenshot]`
+> 
+
 
 ### Option B – Your Own Machine
 
@@ -98,7 +99,7 @@ psql --version
 
 > **Screenshot 2:** Take a screenshot showing the output of both commands.
 >
-> `[insert screenshot]`
+> ![sc1](assets/screen1.png)
 
 ---
 
@@ -154,7 +155,7 @@ Exit the superuser session:
 > **Screenshot 3:** Take a screenshot showing the `CREATE ROLE`, `CREATE DATABASE`,
 > and both `SELECT` results inside the `postgres=#` session.
 >
-> `[insert screenshot]`
+> ![sc2](assets/screen2.png)
 
 ---
 
@@ -256,7 +257,7 @@ Inspect the structure of one table:
 > **Screenshot 4:** Take a screenshot showing the output of `\dt` and
 > `\d ausleihe`.
 >
-> `[insert screenshot]`
+> ![sc3](assets/screen3.png)
 
 ### Questions for Section 4
 
@@ -264,19 +265,19 @@ Inspect the structure of one table:
 and `mitglied` before `ausleihe`. Why does this order matter? What error would
 PostgreSQL report if you tried to create `ausleihe` first?
 
-> *Your answer:*
+> The relationship Parent-Son requires the parents to be created first. Creating ausleihe for example first would trigger an error like `relation "exemplar" does not exist`.
 
 **Question 4.2:** The `mitglied_id` and `ausleihe_id` columns use
 `GENERATED ALWAYS AS IDENTITY`. What does this mean? What happens if you try to
 supply a value explicitly with `INSERT INTO mitglied (mitglied_id, ...) VALUES (5, ...)`?
 
-> *Your answer:*
+> The expression `GENERATED ALWAYS AS IDENTITY` assigns the value automatically. So providing the `VALUES (5, ...)` flags an error (`cannot insert a non-DEFAULT value into column "mitglied_id"`)
 
 **Question 4.3:** `tagesgebuehr` is defined as `NUMERIC(6,2)` while a simpler
 `REAL` would also hold decimal numbers. Give a concrete example of an arithmetic
 result that would differ between the two types when calculating a lending fee.
 
-> *Your answer:*
+> Example: 7 days * 0,20$/day. With `NUMERIC` the reslt is exactly `1,40`. With `REAL`, the `0,20` is not exactly representable, so the result may come out `1,39999...`
 
 ---
 
@@ -361,7 +362,7 @@ SELECT COUNT(*) FROM mitglied;
 
 > **Screenshot 5:** Take a screenshot showing the three `COUNT(*)` results.
 >
-> `[insert screenshot]`
+> ![sc4](assets/screen4.png)
 
 Exit `psql`:
 
@@ -446,7 +447,7 @@ SELECT * FROM ausleihe;
 
 > **Screenshot 6:** Take a screenshot showing the full output of `SELECT * FROM ausleihe`.
 >
-> `[insert screenshot]`
+> ![sc5](assets/screen5.png)
 
 ### Questions for Section 6
 
@@ -454,19 +455,19 @@ SELECT * FROM ausleihe;
 filesystem. What is the difference between server-side `COPY` and a
 client-side import? In which scenario would you need the client-side variant?
 
-> *Your answer:*
+> Server-side COPY reads a file on the database server's filesystem. The client-side variant reads a file on your local machine and streams it over the connection. The client-side variant is to use, when the server's shell is unaccessible or when the file is stored only in the local machine
 
 **Question 6.2:** The `NULL ''` option maps empty CSV fields to `NULL`.
 What would happen without this option if the `rueckgabe_datum` field is empty?
 
-> *Your answer:*
+> Without NULL '', an empty field is read as an empty string ''. Since rueckgabe_datum is a DATE, PostgreSQL would try to cast '' to a date and fail with an invalid input syntax for type date error.
 
 **Question 6.3:** `ausleihe_id` is `GENERATED ALWAYS AS IDENTITY` and was not
 included in the CSV or the `COPY` column list. How does PostgreSQL handle the
 missing value? What would happen if you tried to include `ausleihe_id` in the
 `COPY` column list with explicit values?
 
-> *Your answer:*
+> `ausleihe_id` is auto-generated from the identity sequence for each loaded row, just like with `INSERT`. Including it in the COPY column list values fails the same way as in Q4.2 (`cannot insert a non-DEFAULT value into a GENERATED ALWAYS column`).
 
 ---
 
@@ -503,6 +504,8 @@ ORDER BY tage_ausgeliehen DESC;
 
 > *Describe the result: how many open loans are there, and which member has
 > held a book the longest?*
+>
+> *Result*: 2 open loans. The one borrowed earliest (2026-05-05) has been out longest.
 
 ---
 
@@ -524,6 +527,8 @@ ORDER BY ausleihen_gesamt DESC;
 
 > *Which member has the most loans? What does `FILTER (WHERE ...)` do here
 > compared to a `CASE WHEN` expression?*
+>
+> *Result*: Berger (id 1) has 2 loans; Hartmann and Sommer have 1 each. FILTER (WHERE ...) counts only rows matching the condition inside an aggregate, is however cleaner than SUM(CASE WHEN ... THEN 1 ELSE 0 END) and reads more directly.
 
 ---
 
@@ -546,11 +551,13 @@ WHERE  NOT EXISTS (
 
 > *Which books appear in the result? Verify the result manually against the
 > data you entered.*
+>
+> *Result*: Books whose copies were never lent.
 
 > **Screenshot 7:** Take a screenshot showing the output of all three queries
 > in sequence in the `psql` shell.
 >
-> `[insert screenshot]`
+> ![sc6](assets/screen6.png)
 
 ### Questions for Section 7
 
@@ -558,19 +565,28 @@ WHERE  NOT EXISTS (
 performed to always produce a correct result, and does the join order affect
 correctness or only performance?
 
-> *Your answer:*
+> Logically the joins resolve ausleihe → exemplar → buch and ausleihe → mitglied. Join order does not affect correctness for inner joins; the result set is the same. The planner may reorder joins purely for performance.
 
 **Question 7.2:** Query 2 groups by `m.mitglied_id` in addition to the name
 columns. Why is grouping by the primary key necessary even though names appear
 unique in the sample data?
 
-> *Your answer:*
+> You group by mitglied_id because it's the primary key and guarantees one group per real member. Grouping only by name would merge two different members who happen to share a name. Including the key is also required so the non-aggregated name columns are functionally dependent on the grouping key.
 
 **Question 7.3:** Query 3 uses `NOT EXISTS` with a correlated subquery. Rewrite
 the query using `EXCEPT` and verify that both variants return the same result.
 Write your rewritten query here:
 
 > *Your rewritten query:*
+```sql
+SELECT b.titel, b.verlag FROM buch b
+EXCEPT
+SELECT b.titel, b.verlag
+FROM   buch b
+JOIN   exemplar e ON e.isbn = b.isbn
+JOIN   ausleihe a ON a.exemplar_id = e.exemplar_id;
+```
+
 
 Exit `psql`:
 
@@ -667,7 +683,7 @@ psql -U <your-username> -d kino -f kino.sql
 
 > **Screenshot 8:** Take a screenshot showing the script execution output.
 >
-> `[insert screenshot]`
+> ![sc7](assets/screen7.png)
 
 ---
 
@@ -720,7 +736,7 @@ ORDER BY reservierungen DESC;
 > **Screenshot 9:** Take a screenshot showing the output of all three
 > `SELECT` statements.
 >
-> `[insert screenshot]`
+> ![sc8](assets/screen8.png)
 
 ### Questions for Section 9
 
@@ -728,19 +744,19 @@ ORDER BY reservierungen DESC;
 constraint. What does this prevent, and at which level is this constraint
 enforced — application or database?
 
-> *Your answer:*
+> It prevents the same seat from being booked twice for the same screening (no duplicate (vorstellung_id, sitzplatz) pair). It's enforced at the database level, so it holds regardless of application bugs.
 
 **Question 9.2:** The third query uses `LEFT JOIN` between `vorstellung` and
 `reservierung`. What would be different about the result if you used `JOIN`
 (inner join) instead? Which films would disappear from the result and why?
 
-> *Your answer:*
+> With a plain inner JOIN, screenings (and therefore films) with zero reservations would vanish from the result. LEFT JOIN keeps every screening and shows a count of 0 for those with no reservations.
 
 **Question 9.3:** `ON DELETE CASCADE` was chosen for `reservierung.vorstellung_id`,
 but `ON DELETE RESTRICT` for `vorstellung.film_id`. Justify both choices in
 terms of the domain.
 
-> *Your answer:*
+> reservierung → vorstellung uses CASCADE: if a screening is cancelled, its seat reservations are meaningless and should disappear automatically. vorstellung → film uses RESTRICT: you shouldn't be able to delete a film while screenings of it still exist, that would orphan scheduled shows, so the delete is blocked until they're handled.
 
 Exit `psql`:
 
@@ -757,7 +773,12 @@ SQLite (DBMS_05) and PostgreSQL (this exercise) are both relational databases,
 but they operate very differently. Name two concrete differences you experienced
 in this exercise — in terms of setup, access control, or SQL behaviour.
 
-> *Your answer:*
+> SQLite is a file, not a service. There's no login, no roles, no server
+  process. If you can open the file, you can read the database. PostgreSQL works
+   differently: you connect over a socket or network, authenticate with a
+  password, and roles and ownership decide what you can touch. It also enforces
+  stricter types and has features SQLite doesn't, like GENERATED ALWAYS AS
+  IDENTITY and FILTER.
 
 **Question B – COPY vs. INSERT:**  
 You inserted the `buch` and `exemplar` rows one at a time, and the `ausleihe`
@@ -765,21 +786,31 @@ rows via `COPY`. For a real import of 50,000 rows, which approach would you
 choose and why? What is the main operational cost of individual `INSERT`
 statements at scale?
 
-> *Your answer:*
+> For 50,000 rows, use COPY. Each INSERT is its own statement, its own
+  round-trip, its own commit. You're paying that overhead 50,000 times. COPY
+  sends everything in one bulk pass and can easily be an order of magnitude
+  faster.
 
 **Question C – Role model:**  
 You created a dedicated role with `LOGIN` and a password. The `postgres`
 superuser also exists. What is the security principle behind creating a
 separate role instead of always connecting as `postgres`?
 
-> *Your answer:*
+> Least privilege. The postgres superuser can do anything, and that's the
+  problem. Use it routinely and every mistake, or every attacker who gets in,
+  has the same unlimited access with nothing to audit afterward. A dedicated
+  role that only owns what it needs shrinks the blast radius and makes your
+  audit logs worth reading.
 
 **Question D – Script-driven setup:**  
 The `kino.sql` script creates the schema and inserts data in one run. What
 is the advantage of this approach over typing the statements interactively?
 Name one situation where an interactive approach is still preferable.
 
-> *Your answer:*
+> Scripts win for setup. They're version-controlled and run the same way every
+  time, so you don't forget a step or fat-finger something mid-run. For
+  debugging or just learning what a statement actually does, interactive is
+  still better.
 
 ---
 
